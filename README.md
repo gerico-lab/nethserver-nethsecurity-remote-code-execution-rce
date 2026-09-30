@@ -13,8 +13,8 @@ In the following section, we present the test environment we set up and the tech
  * [1. Environment](#1-environment)
  * [2. Technical details](#2-technical-details)
    * [2.1. Authenticated Local and/or Remote Code Execution – check-remote](#21-authenticated-local-andor-remote-code-execution--check-remote)
-   * [2.2. Authenticated Remote Code Execution – init-remote](#22-authenticated-remote-code-execution-init-remote)
-   * [2.3. Authenticated Remote Code Execution - reset](#23-authenticated-remote-code-execution-reset)
+   * [2.2. Authenticated Remote Code Execution - init-remote](#22-authenticated-remote-code-execution---init-remote)
+   * [2.3. Authenticated Remote Code Execution - reset](#23-authenticated-remote-code-execution---reset)
  * [3. Disclosure](#3-disclosure)
 
 ## 1. Environment
@@ -167,7 +167,7 @@ The remote shell interprets the command:
  2. the character `|` (pipe) send this JSON to the standard input (stdin) of `/usr/libexec/rpcd/ns.ha call validate-requirements`
  3. the program read the JSON from the standard input and execute the validate-requirements procedure.
 
-### 2.2 Authenticated Remote Code Execution – init-remote
+### 2.2 Authenticated Remote Code Execution - init-remote
 
 A Code Injection exists in Nethesis NethSecurity High Availability API due to improper validation of user supplied input in `lan_interface` field in */api/ubus/call* with `path`: `ns.ha` and `method`: `init-remote`. This makes it possible for authenticated attackers to achieve remote code execution.
 
@@ -237,7 +237,7 @@ A Code Injection exists in Nethesis NethSecurity High Availability API due to im
 #### Description
 To exploit the reset functionality and gain RCE both the appliances must be configured for high availability. From the Nethesis documentation, the reset command restores the cluster configuration to its default state. Typically, after the reset, the primary node can continue operating normally, while the secondary node, no longer used in the cluster should be reset to default to avoid any conflicts. After the reset, only the HA interface remains active, so a reboot is required to complete the process. The reset must be performed locally on the primary node.
 
-So, to achieve this command injection we need a valid bearer token for the primary node. Then, we can use the reset feature with the API at /api/ubus/call with the following JSON payload:
+So, to achieve this command injection we need a valid bearer token for the primary node. Then, we can use the reset feature with the API at `/api/ubus/call` with the following JSON payload:
 
 ```JSON
 {
@@ -252,13 +252,13 @@ So, to achieve this command injection we need a valid bearer token for the prima
 
 The vulnerability is triggered only with `role: primary` when the `pubkey` field is read without being sanitized, and the `execute_remote_command` function is subsequently executed.
 
-The payload is sent to the primary node with valid credentials (a valid bearer token), but it is executed on the secondary, backup, node. No credentials is needed for the remote, backup, node due to the high availability configuration already set up.
+The payload is sent to the primary node with valid credentials (a valid bearer token), but it is executed on the secondary, backup, node. **No credentials is needed for the remote, backup, node due to the high availability configuration already set up.**
 
 We can see the payload, request and response, sent using Burp Suite in the following screenshot:
  
-Figure 10 - request and response from Burp Suite
+![Figure 10 - request and response from Burp Suite](img/10-request_and_response_from_burp_suite.png)
 
-We can validate code execution on the remote, backup, node connecting via SSH (previously enabled via Web UI) with root account and its password and then we can print the content of /tmp/reset.txt:
+We can validate code execution on the remote, backup, node connecting via SSH (previously enabled via Web UI) with root account and its password and then we can print the content of `/tmp/reset.txt`:
  
 ![Figure 11 - Execution of "id > /tmp/reset.txt"](img/11-execution_of_id.png)
 
@@ -273,11 +273,10 @@ If the `role` field is `primary`, the `pubkey` field is placed in a JSON that is
  
 ![Figure 12 - reset source code from GitHub](img/12-reset_source_code_from_github.png)
 
-
 ## 3. Disclosure
 
 We’ve decided to follow the industry standard 90+30 days responsible disclosure process; here’s the timeline:
 
  - **August 5, 2026**: Sent initial report to Nethesis’s security team (sviluppo@nethesis.it) with full technical details and PoC exploits. All compiled according to their "security" section of the [Developer Handbook](https://handbook.nethserver.org/security/#report-vulnerabilities).
  - **August 6, 2026**: Nethesis confirms the vulnerabilities, release a pubic [Pull Request](https://github.com/NethServer/nethsecurity/pull/1866) and sets the timeline for the remediation patch to September.
- - **September 30, 2026**: Nethesis publish the advisory [Authenticated command injection in NethSecurity High Availability API ](https://github.com/NethServer/nethsecurity/security/advisories/GHSA-4vpr-3hh7-mj6c).
+ - **September 30, 2026**: Nethesis publish the advisory [GHSA-4vpr-3hh7-mj6c - Authenticated command injection in NethSecurity High Availability API ](https://github.com/NethServer/nethsecurity/security/advisories/GHSA-4vpr-3hh7-mj6c).
